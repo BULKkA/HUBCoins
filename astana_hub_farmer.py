@@ -60,7 +60,7 @@ COMMENT_TEXT  = os.environ.get("COMMENT_TEXT", "Интересный пост, �
 # ─────────────────────────── LOGGING ─────────────────────────────────────────
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").strip().upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
@@ -125,13 +125,17 @@ def get_posts(page: int = 1, page_size: int = 20) -> list[dict]:
 
 def view_post(post: dict) -> bool:
     """
-    POST /community/api/blog/{id}/read/
-    Сайт требует 20 сек просмотра — имитируем задержкой перед вызовом.
+    1. GET  /community/api/blog/{id}/   — загрузить пост
+    2. POST /community/api/blog/{id}/read/ — засчитать просмотр
     """
     pid = post["id"]
-    url = BASE_URL + f"/community/api/blog/{pid}/read/"
     try:
-        resp = session.post(url, timeout=15)
+        # Шаг 1: загрузить детали поста (как браузер)
+        session.get(BASE_URL + f"/community/api/blog/{pid}/", timeout=15)
+        time.sleep(1)
+        # Шаг 2: отметить как прочитанный
+        resp = session.post(BASE_URL + f"/community/api/blog/{pid}/read/", timeout=15)
+        log.debug("  view_post %s -> %s %s", pid, resp.status_code, resp.text[:100])
         return resp.status_code in (200, 201)
     except Exception as e:
         log.warning("  Ошибка view_post %s: %s", pid, e)
@@ -258,9 +262,8 @@ def execute_quest(quest: dict, history: dict) -> bool:
 
             # Для просмотра — имитируем 20 сек чтения перед mark_read
             if action == "view":
-                log.info("  ⏳ [%d/%d] Читаю '%s' (20 сек)...",
+                log.info("  👁  [%d/%d] Читаю '%s'...",
                          completed + 1, needed, get_post_title(post))
-                time.sleep(20)
                 success = view_post(post)
                 log.info("  👁  Просмотр — %s", "✓" if success else "✗")
 
@@ -301,7 +304,7 @@ def refresh_csrf() -> None:
 
 def get_quests() -> list[dict]:
     refresh_csrf()
-    resp = session.get(BASE_URL + "/s/games/api/quests/", timeout=15)
+    resp = session.get(BASE_URL + "/s/games/api/quests/", params={"module": "blog"}, timeout=15)
     resp.raise_for_status()
     return resp.json().get("active_quests", [])
 
