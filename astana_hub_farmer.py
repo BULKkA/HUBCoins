@@ -29,12 +29,27 @@ BASE_URL     = "https://astanahub.com"
 # Путь к файлу истории — переопределяется через ENV в Docker
 HISTORY_FILE = os.environ.get("HISTORY_FILE", "history.json")
 
-# Куки берутся из переменных окружения (задаются в CapRover → App → ENV VARS)
-# Локально можно оставить значения прямо здесь
-COOKIES = {
-    "sessionid": os.environ.get("SESSION_ID", "hfl91kxeb60u5kgdmumwogf432w09t5p"),
-    "csrftoken":  os.environ.get("CSRF_TOKEN",  "AlfkWLGS6sWv45SfZFAtjcFuUCjI0use"),
-}
+# Куки берутся из переменных окружения (задаются в CapRover -> App -> ENV VARS)
+# Можно передать полную строку куки через COOKIE_STRING
+# или отдельные значения SESSION_ID / CSRF_TOKEN
+_cookie_string = os.environ.get("COOKIE_STRING", "").strip()
+
+def _parse_cookie_string(s):
+    result = {}
+    for part in s.split(";"):
+        part = part.strip()
+        if "=" in part:
+            k, v = part.split("=", 1)
+            result[k.strip()] = v.strip()
+    return result
+
+if _cookie_string:
+    COOKIES = _parse_cookie_string(_cookie_string)
+else:
+    COOKIES = {
+        "sessionid": os.environ.get("SESSION_ID", "hfl91kxeb60u5kgdmumwogf432w09t5p").strip(),
+        "csrftoken":  os.environ.get("CSRF_TOKEN",  "AlfkWLGS6sWv45SfZFAtjcFuUCjI0use").strip(),
+    }
 
 LOOP_DELAY    = int(os.environ.get("LOOP_DELAY",    "10"))
 REQUEST_DELAY = int(os.environ.get("REQUEST_DELAY", "2"))
@@ -60,7 +75,7 @@ session.headers.update({
     "Accept-Language":    "ru,en;q=0.9",
     "Referer":            BASE_URL + "/community/",
     "User-Agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0",
-    "X-CSRFToken":        COOKIES["csrftoken"],
+    "X-CSRFToken":        COOKIES.get("csrftoken", ""),
     "sec-fetch-dest":     "empty",
     "sec-fetch-mode":     "cors",
     "sec-fetch-site":     "same-origin",
