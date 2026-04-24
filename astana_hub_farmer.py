@@ -292,7 +292,15 @@ def execute_quest(quest: dict, history: dict) -> bool:
 
 # ─────────────────────────── QUESTS API ──────────────────────────────────────
 
+def refresh_csrf() -> None:
+    """Обновляет X-CSRFToken из текущих куки сессии."""
+    csrf = session.cookies.get("csrftoken", "")
+    if csrf:
+        session.headers.update({"X-CSRFToken": csrf})
+
+
 def get_quests() -> list[dict]:
+    refresh_csrf()
     resp = session.get(BASE_URL + "/s/games/api/quests/", timeout=15)
     resp.raise_for_status()
     return resp.json().get("active_quests", [])
