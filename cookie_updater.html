@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Cookie Updater</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0d0d0d;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 32px;
+    width: 100%;
+    max-width: 560px;
+  }
+  h1 {
+    font-size: 18px;
+    color: #fff;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+  .sub {
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 28px;
+  }
+
+  /* STEP */
+  .step { margin-bottom: 24px; }
+  .step-label {
+    font-size: 11px;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+
+  /* BOOKMARKLET */
+  .bookmarklet-wrap {
+    background: #111;
+    border: 1px dashed #333;
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .bookmarklet-link {
+    display: inline-block;
+    background: #1e3a5f;
+    color: #7eb8f7;
+    border: 1px solid #2a5080;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: grab;
+  }
+  .bookmarklet-hint {
+    font-size: 12px;
+    color: #555;
+    line-height: 1.5;
+  }
+
+  /* STATUS */
+  #status {
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    background: #111;
+    border: 1px solid #222;
+    color: #555;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #status.ok  { border-color: #1a4a2a; color: #4caf7d; background: #0d1f14; }
+  #status.err { border-color: #4a1a1a; color: #e05555; background: #1f0d0d; }
+
+  /* LAST UPDATE */
+  #last-update {
+    font-size: 11px;
+    color: #444;
+    margin-top: 10px;
+    text-align: right;
+  }
+
+  /* MANUAL */
+  details { margin-top: 20px; }
+  summary {
+    font-size: 12px;
+    color: #444;
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 0;
+  }
+  summary:hover { color: #666; }
+  textarea {
+    width: 100%;
+    margin-top: 10px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 10px;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+  }
+  textarea:focus { border-color: #3a3a3a; }
+  button {
+    margin-top: 10px;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 8px 20px;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: #2a2a2a; border-color: #444; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🍪 Cookie Updater</h1>
+  <p class="sub">Astana Hub Farmer — обновление сессии</p>
+
+  <div class="step">
+    <div class="step-label">Шаг 1 — Добавь букмарклет в браузер</div>
+    <div class="bookmarklet-wrap">
+      <a class="bookmarklet-link" href="javascript:(function(){var s=document.cookie;fetch(location.origin+'/update-cookies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cookies:s})}).then(r=>r.json()).then(d=>alert(d.ok?'✅ Куки обновлены!':'❌ Ошибка: '+d.error)).catch(e=>alert('❌ '+e));})();">
+        🔖 Обновить куки
+      </a>
+      <span class="bookmarklet-hint">Перетащи в панель закладок браузера</span>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-label">Шаг 2 — Зайди на astanahub.com и кликни закладку</div>
+  </div>
+
+  <div class="step">
+    <div class="step-label">Статус последнего обновления</div>
+    <div id="status">⏳ Ожидание обновления...</div>
+    <div id="last-update"></div>
+  </div>
+
+  <details>
+    <summary>Вставить куки вручную</summary>
+    <textarea id="manual-cookies" placeholder="Вставь сюда строку cookie: из DevTools..."></textarea>
+    <button onclick="sendManual()">Отправить</button>
+  </details>
+</div>
+
+<script>
+  // Проверяем статус при загрузке
+  fetch('/cookie-status')
+    .then(r => r.json())
+    .then(d => {
+      if (d.updated_at) {
+        setStatus('ok', '✅ Куки актуальны');
+        document.getElementById('last-update').textContent =
+          'Последнее обновление: ' + new Date(d.updated_at).toLocaleString('ru');
+      }
+    })
+    .catch(() => {});
+
+  // Авто-обновление статуса каждые 10 сек
+  setInterval(() => {
+    fetch('/cookie-status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.updated_at) {
+          setStatus('ok', '✅ Куки актуальны');
+          document.getElementById('last-update').textContent =
+            'Последнее обновление: ' + new Date(d.updated_at).toLocaleString('ru');
+        }
+      }).catch(() => {});
+  }, 10000);
+
+  function setStatus(type, msg) {
+    const el = document.getElementById('status');
+    el.className = type;
+    el.textContent = msg;
+  }
+
+  function sendManual() {
+    const cookies = document.getElementById('manual-cookies').value.trim();
+    if (!cookies) return;
+    fetch('/update-cookies', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cookies})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        setStatus('ok', '✅ Куки обновлены вручную');
+        document.getElementById('last-update').textContent =
+          'Обновлено: ' + new Date().toLocaleString('ru');
+      } else {
+        setStatus('err', '❌ Ошибка: ' + d.error);
+      }
+    })
+    .catch(e => setStatus('err', '❌ ' + e));
+  }
+</script>
+</body>
+</html>

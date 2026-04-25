@@ -21,6 +21,7 @@ import time
 import logging
 import os
 import re
+from cookie_server import start_cookie_server, load_cookies_from_file, COOKIES_FILE
 
 # ─────────────────────────── CONFIG ──────────────────────────────────────────
 
@@ -32,6 +33,8 @@ HISTORY_FILE = os.environ.get("HISTORY_FILE", "history.json")
 # Куки берутся из переменных окружения (задаются в CapRover -> App -> ENV VARS)
 # Можно передать полную строку куки через COOKIE_STRING
 # или отдельные значения SESSION_ID / CSRF_TOKEN
+# Куки загружаются динамически из файла (обновляются через веб-интерфейс)
+# При первом старте берём из ENV или COOKIE_STRING как fallback
 _cookie_string = os.environ.get("COOKIE_STRING", "").strip()
 
 def _parse_cookie_string(s):
@@ -44,12 +47,14 @@ def _parse_cookie_string(s):
     return result
 
 if _cookie_string:
-    COOKIES = _parse_cookie_string(_cookie_string)
+    _initial_cookies = _parse_cookie_string(_cookie_string)
 else:
-    COOKIES = {
-        "sessionid": os.environ.get("SESSION_ID", "hfl91kxeb60u5kgdmumwogf432w09t5p").strip(),
-        "csrftoken":  os.environ.get("CSRF_TOKEN",  "AlfkWLGS6sWv45SfZFAtjcFuUCjI0use").strip(),
+    _initial_cookies = {
+        "sessionid": os.environ.get("SESSION_ID", "").strip(),
+        "csrftoken":  os.environ.get("CSRF_TOKEN",  "").strip(),
     }
+
+COOKIES = _initial_cookies  # будет обновляться динамически
 
 LOOP_DELAY    = int(os.environ.get("LOOP_DELAY",    "10"))
 REQUEST_DELAY = int(os.environ.get("REQUEST_DELAY", "2"))
@@ -295,11 +300,23 @@ def execute_quest(quest: dict, history: dict) -> bool:
 
 # ─────────────────────────── QUESTS API ──────────────────────────────────────
 
-def refresh_csrf() -> None:
-    """Обновляет X-CSRFToken из текущих куки сессии."""
+def refresh_cookies() -> None:
+    """
+    Загружает актуальные куки из файла (обновляются через веб-интерфейс)
+    и применяет их к сессии.
+    """
+    file_cookies = load_cookies_from_file()
+    if file_cookies:
+        session.cookies.update(file_cookies)
+
+    # Обновляем X-CSRFToken из актуальных куки
     csrf = session.cookies.get("csrftoken", "")
     if csrf:
         session.headers.update({"X-CSRFToken": csrf})
+
+
+def refresh_csrf() -> None:
+    refresh_cookies()
 
 
 def get_quests() -> list[dict]:
@@ -328,8 +345,15 @@ def remove_quest(quest_id) -> bool:
 # ─────────────────────────── MAIN LOOP ───────────────────────────────────────
 
 def run_farmer() -> None:
+    # Запускаем cookie-сервер в фоне
+    start_cookie_server()
+
     log.info("🚀 Фармер запущен. Нажми Ctrl+C для остановки.")
-    log.info("📂 История: %s\n", HISTORY_FILE)
+    log.info("📂 История: %s", HISTORY_FILE)
+    log.info("🌐 Веб-интерфейс для обновления куки: http://localhost:8765\n")
+
+    # Загружаем куки из файла если есть
+    refresh_cookies()
 
     history        = load_history()
     total          = 0
