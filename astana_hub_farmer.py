@@ -21,7 +21,7 @@ import time
 import logging
 import os
 import re
-from cookie_server import start_cookie_server, load_cookies_from_file, COOKIES_FILE
+from cookie_server import start_cookie_server, load_cookies_from_file, COOKIES_FILE, is_paused
 
 # ─────────────────────────── CONFIG ──────────────────────────────────────────
 
@@ -302,15 +302,22 @@ def execute_quest(quest: dict, history: dict) -> bool:
 
 def refresh_cookies() -> None:
     """
-    Загружает актуальные куки из файла (обновляются через веб-интерфейс)
-    и применяет их к сессии.
+    Загружает актуальные куки из файла и применяет их к сессии.
+    Полностью заменяет старые куки чтобы не было дублей.
     """
     file_cookies = load_cookies_from_file()
     if file_cookies:
+        session.cookies.clear()
         session.cookies.update(file_cookies)
 
     # Обновляем X-CSRFToken из актуальных куки
     csrf = session.cookies.get("csrftoken", "")
+    if not csrf:
+        # fallback — берём первый подходящий
+        for c in session.cookies:
+            if c.name == "csrftoken":
+                csrf = c.value
+                break
     if csrf:
         session.headers.update({"X-CSRFToken": csrf})
 
@@ -321,7 +328,11 @@ def refresh_csrf() -> None:
 
 def get_quests() -> list[dict]:
     refresh_csrf()
-    resp = session.get(BASE_URL + "/s/games/api/quests/", params={"module": "blog"}, timeout=15)
+    resp = session.get(BASE_URL + "/s/games/api/quests/", timeout=15)
+    if resp.status_code != 200:
+        log.error("quests -> %s | cookies: %s",
+                  resp.status_code,
+                  {c.name: c.value[:8]+"..." for c in session.cookies})
     resp.raise_for_status()
     return resp.json().get("active_quests", [])
 
@@ -361,6 +372,11 @@ def run_farmer() -> None:
     MAX_UNKNOWN    = 10  # лимит — после него остановка до ручного запуска
 
     while True:
+        # Пауза
+        if is_paused():
+            time.sleep(2)
+            continue
+
         try:
             quests = get_quests()
             log.info("Активных квестов: %d", len(quests))
