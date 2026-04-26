@@ -21,7 +21,7 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 
-COOKIES_FILE = os.environ.get("COOKIES_FILE", "data/cookies.json")
+COOKIES_FILE = os.environ.get("COOKIES_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.json"))
 SERVER_PORT  = int(os.environ.get("COOKIE_SERVER_PORT", "8765"))
 HTML_PATH    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookie_updater.html")
 
@@ -83,7 +83,9 @@ def save_cookies_to_file(cookie_string: str) -> dict:
         if "=" in part:
             k, v = part.split("=", 1)
             cookies[k.strip()] = v.strip()
-    os.makedirs(os.path.dirname(os.path.abspath(COOKIES_FILE)), exist_ok=True)
+    dirpath = os.path.dirname(os.path.abspath(COOKIES_FILE))
+    if dirpath:
+        os.makedirs(dirpath, exist_ok=True)
     with open(COOKIES_FILE, "w") as f:
         json.dump({
             "cookies":    cookies,
@@ -111,7 +113,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
 
-        if path in ("/", "/index.html"):
+        if path in ("/", "/index.html", "/cookie_updater.html"):
             try:
                 with open(HTML_PATH, "rb") as f:
                     content = f.read()
@@ -210,9 +212,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
         self._cors()
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
 
 def start_cookie_server():
