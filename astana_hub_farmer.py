@@ -197,26 +197,31 @@ def react_post(post: dict) -> bool:
         return False
 
 
-def comment_post(post: dict) -> bool:
+def comment_post(post: dict) -> tuple[bool, str]:
     """
     POST /api/comment/
     Body: {"message": "...", "primary_key": "{id}", "source": "Blog"}
+    Returns: (success, error_message)
     """
     pid = post["id"]
     try:
+        # Генерируем случайное 8-значное число для комментария
+        random_comment = str(random.randint(10000000, 99999999))
         resp = session.post(
             BASE_URL + "/api/comment/",
             json={
-                "message":     COMMENT_TEXT,
+                "message":     random_comment,
                 "primary_key": str(pid),
                 "source":      "Blog",
             },
             timeout=REQUEST_TIMEOUT,
         )
-        return resp.status_code in (200, 201)
+        if resp.status_code in (200, 201):
+            return True, ""
+        else:
+            return False, f"HTTP {resp.status_code}: {resp.text[:100]}"
     except Exception as e:
-        log.warning("  Ошибка comment_post %s: %s", pid, e)
-        return False
+        return False, str(e)
 
 # ─────────────────────────── QUEST HELPERS ───────────────────────────────────
 
@@ -337,10 +342,20 @@ def execute_quest(quest: dict, history: dict) -> bool:
                          "✓" if success else "✗")
 
             elif action == "comment":
-                success = comment_post(post)
+                success, error_msg = comment_post(post)
                 log.info("  💬 [%d/%d] Комментарий '%s' — %s",
                          completed + 1, needed, get_post_title(post),
                          "✓" if success else "✗")
+                if not success:
+                    log.info("    Причина: %s", error_msg)
+                    if "Превышено допустимое количество комментариев" in error_msg:
+                        log.warning("  Лимит комментариев превышен, удаляем квест")
+                        try:
+                            remove_quest(quest["id"])
+                            log.info("  Квест удален")
+                        except Exception as e:
+                            log.error("  Ошибка удаления квеста: %s", e)
+                        return False
 
             if success:
                 mark_done(history, hkey, pid)
