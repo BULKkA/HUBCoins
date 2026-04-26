@@ -63,9 +63,9 @@ AUTO_LOAD_BROWSER_COOKIES = os.environ.get("AUTO_LOAD_BROWSER_COOKIES", "true").
 
 LOOP_DELAY    = int(os.environ.get("LOOP_DELAY",    "10"))
 REQUEST_DELAY = int(os.environ.get("REQUEST_DELAY", "2"))
-READ_DELAY    = int(os.environ.get("READ_DELAY",    "10"))
+READ_DELAY    = int(os.environ.get("READ_DELAY",    "20"))
 
-VIEW_DELAY    = int(os.environ.get("VIEW_DELAY",    "40"))
+VIEW_DELAY    = int(os.environ.get("VIEW_DELAY",    "60"))
 LIKE_DELAY    = int(os.environ.get("LIKE_DELAY",    "10"))
 COMMENT_DELAY = int(os.environ.get("COMMENT_DELAY", "120"))
 
